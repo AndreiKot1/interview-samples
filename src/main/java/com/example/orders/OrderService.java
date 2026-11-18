@@ -23,6 +23,15 @@ public class OrderService {
 
     public record PlaceOrderRequest(long customerId, String sku, int quantity, BigDecimal amount, String email) {}
 
+    public List<OrderEntity> getOrders() {
+        return orderRepository.findAll();
+    }
+
+    public OrderEntity getOrder(long id) {
+        return orderRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + id));
+    }
+
     @Transactional
     public long placeOrder(PlaceOrderRequest request) throws IOException, InterruptedException {
         OrderEntity order = orderRepository.saveAndFlush(
@@ -46,14 +55,5 @@ public class OrderService {
         }
 
         return order.getId();
-    }
-
-    public OrderEntity getOrder(long id) {
-        return orderRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + id));
-    }
-
-    public List<OrderEntity> getOrders() {
-        return orderRepository.findAll();
     }
 }
