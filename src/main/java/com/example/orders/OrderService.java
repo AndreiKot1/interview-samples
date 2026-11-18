@@ -46,4 +46,9 @@ public class OrderService {
 
         return order.getId();
     }
+
+    public OrderEntity getOrder(long id) {
+        return orderRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + id));
+    }
 }
