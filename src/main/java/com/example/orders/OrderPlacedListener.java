@@ -8,15 +8,15 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
-public class OrderPaidListener {
+public class OrderPlacedListener {
 
-    private static final Logger log = LoggerFactory.getLogger(OrderPaidListener.class);
+    private static final Logger log = LoggerFactory.getLogger(OrderPlacedListener.class);
 
     private final OrderRepository orderRepository;
     private final ApiClient apiClient;
     private final PdfGenerator pdfGenerator;
 
-    public OrderPaidListener(OrderRepository orderRepository, ApiClient apiClient, PdfGenerator pdfGenerator) {
+    public OrderPlacedListener(OrderRepository orderRepository, ApiClient apiClient, PdfGenerator pdfGenerator) {
         this.orderRepository = orderRepository;
         this.apiClient = apiClient;
         this.pdfGenerator = pdfGenerator;
@@ -25,7 +25,7 @@ public class OrderPaidListener {
     @RabbitListener(queues = "order.placed")
     @Transactional
     public void onOrderPlaced(OrderPlacedEvent event) throws IOException, InterruptedException {
-        log.info("Received order paid event for order {}", event.orderId());
+        log.info("Received order placed event for order {}", event.orderId());
 
         OrderEntity order = orderRepository.findById(event.orderId())
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + event.orderId()));
