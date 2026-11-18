@@ -55,7 +55,7 @@ public class OrderService {
         }
 
         rabbitTemplate.convertAndSend(
-                "orders", "order.paid", new OrderPaidListener.OrderPaidEvent(order.getId(), paymentId, order.getAmount()));
+                "orders", "order.placed", new OrderPlacedEvent(order.getId(), paymentId, order.getAmount()));
 
         return order.getId();
     }

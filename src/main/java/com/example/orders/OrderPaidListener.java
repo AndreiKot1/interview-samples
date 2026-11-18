@@ -1,7 +1,6 @@
 package com.example.orders;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -23,11 +22,9 @@ public class OrderPaidListener {
         this.pdfGenerator = pdfGenerator;
     }
 
-    public record OrderPaidEvent(long orderId, String paymentId, BigDecimal amount) {}
-
-    @RabbitListener(queues = "order.paid")
+    @RabbitListener(queues = "order.placed")
     @Transactional
-    public void onOrderPaid(OrderPaidEvent event) throws IOException, InterruptedException {
+    public void onOrderPlaced(OrderPlacedEvent event) throws IOException, InterruptedException {
         log.info("Received order paid event for order {}", event.orderId());
 
         OrderEntity order = orderRepository.findById(event.orderId())
