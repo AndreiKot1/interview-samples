@@ -2,13 +2,6 @@ package com.example.orders;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -22,10 +15,12 @@ public class OrderPaidListener {
 
     private final OrderRepository orderRepository;
     private final ApiClient apiClient;
+    private final PdfGenerator pdfGenerator;
 
-    public OrderPaidListener(OrderRepository orderRepository, ApiClient apiClient) {
+    public OrderPaidListener(OrderRepository orderRepository, ApiClient apiClient, PdfGenerator pdfGenerator) {
         this.orderRepository = orderRepository;
         this.apiClient = apiClient;
+        this.pdfGenerator = pdfGenerator;
     }
 
     public record OrderPaidEvent(long orderId, String paymentId, BigDecimal amount) {}
@@ -41,39 +36,11 @@ public class OrderPaidListener {
         String shipmentId = apiClient.createShipment(order);
         apiClient.creditLoyaltyPoints(order);
 
-        generateConfirmationPdf(order, shipmentId);
+        pdfGenerator.generateConfirmation(order, shipmentId);
 
         order.setStatus("SHIPPED");
         orderRepository.save(order);
 
         log.info("Order {} shipped with shipment {}", order.getId(), shipmentId);
-    }
-
-    private void generateConfirmationPdf(OrderEntity order, String shipmentId) throws IOException {
-        try (PDDocument document = new PDDocument()) {
-            PDPage page = new PDPage();
-            document.addPage(page);
-
-            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
-                content.beginText();
-                content.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
-                content.setLeading(16f);
-                content.newLineAtOffset(50, 750);
-                content.showText("Order confirmation #" + order.getId());
-                content.newLine();
-                content.showText("Customer: " + order.getCustomerId());
-                content.newLine();
-                content.showText("Item: " + order.getSku() + " x " + order.getQuantity());
-                content.newLine();
-                content.showText("Amount: " + order.getAmount());
-                content.newLine();
-                content.showText("Shipment: " + shipmentId);
-                content.endText();
-            }
-
-            Path target = Path.of("/data/confirmations", "order-" + order.getId() + ".pdf");
-            Files.createDirectories(target.getParent());
-            document.save(target.toFile());
-        }
     }
 }
