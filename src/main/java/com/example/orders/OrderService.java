@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,10 +16,12 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final ApiClient apiClient;
+    private final RabbitTemplate rabbitTemplate;
 
-    public OrderService(OrderRepository orderRepository, ApiClient apiClient) {
+    public OrderService(OrderRepository orderRepository, ApiClient apiClient, RabbitTemplate rabbitTemplate) {
         this.orderRepository = orderRepository;
         this.apiClient = apiClient;
+        this.rabbitTemplate = rabbitTemplate;
     }
 
     public record PlaceOrderRequest(long customerId, String sku, int quantity, BigDecimal amount, String email) {}
@@ -49,6 +52,9 @@ public class OrderService {
         } catch (Exception e) {
             log.warn("Could not send mail for order {}", order.getId());
         }
+
+        rabbitTemplate.convertAndSend(
+                "orders", "order.paid", new OrderPaidListener.OrderPaidEvent(order.getId(), paymentId, order.getAmount()));
 
         if (order.getQuantity() > 100) {
             throw new IllegalStateException("Bulk orders need manual approval");
