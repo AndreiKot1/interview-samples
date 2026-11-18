@@ -2,6 +2,7 @@ package com.example.orders;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -50,5 +51,9 @@ public class OrderService {
     public OrderEntity getOrder(long id) {
         return orderRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + id));
+    }
+
+    public List<OrderEntity> getOrders() {
+        return orderRepository.findAll();
     }
 }
