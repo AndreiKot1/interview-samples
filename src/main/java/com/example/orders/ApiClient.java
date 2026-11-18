@@ -13,6 +13,8 @@ public class ApiClient {
     private static final String INVENTORY_URL = "https://inventory.example.com/api/v1/reservations";
     private static final String PAYMENT_URL = "https://payments.example.com/api/v1/charges";
     private static final String MAIL_URL = "https://mail.example.com/api/v1/send";
+    private static final String SHIPPING_URL = "https://shipping.example.com/api/v1/shipments";
+    private static final String LOYALTY_URL = "https://loyalty.example.com/api/v1/points";
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
@@ -37,6 +39,23 @@ public class ApiClient {
     public void sendConfirmationMail(OrderEntity order) throws IOException, InterruptedException {
         post(MAIL_URL, String.format(
                 "{\"to\":\"%s\",\"template\":\"order-confirmed\",\"orderId\":%d}", order.getEmail(), order.getId()));
+    }
+
+    public String createShipment(OrderEntity order) throws IOException, InterruptedException {
+        HttpResponse<String> response = post(SHIPPING_URL, String.format(
+                "{\"orderId\":%d,\"sku\":\"%s\",\"quantity\":%d}", order.getId(), order.getSku(), order.getQuantity()));
+        if (response.statusCode() != 200) {
+            throw new IllegalStateException("Shipment creation failed: " + response.statusCode());
+        }
+        return response.body();
+    }
+
+    public void creditLoyaltyPoints(OrderEntity order) throws IOException, InterruptedException {
+        HttpResponse<String> response = post(LOYALTY_URL, String.format(
+                "{\"customerId\":%d,\"points\":%s}", order.getCustomerId(), order.getAmount()));
+        if (response.statusCode() != 200) {
+            throw new IllegalStateException("Loyalty credit failed: " + response.statusCode());
+        }
     }
 
     private HttpResponse<String> post(String url, String body) throws IOException, InterruptedException {
