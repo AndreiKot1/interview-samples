@@ -57,10 +57,6 @@ public class OrderService {
         rabbitTemplate.convertAndSend(
                 "orders", "order.paid", new OrderPaidListener.OrderPaidEvent(order.getId(), paymentId, order.getAmount()));
 
-        if (order.getQuantity() > 100) {
-            throw new IllegalStateException("Bulk orders need manual approval");
-        }
-
         return order.getId();
     }
 }
