@@ -43,9 +43,6 @@ public class OrderService {
         // http call
         apiClient.reserveStock(order);
 
-        String paymentId = apiClient.chargeCustomer(order);
-        order.setPaymentId(paymentId);
-        order.setStatus("PAID");
         orderRepository.save(order);
 
         try {
@@ -55,7 +52,7 @@ public class OrderService {
         }
 
         rabbitTemplate.convertAndSend(
-                "orders", "order.placed", new OrderPlacedEvent(order.getId(), paymentId, order.getAmount()));
+                "orders", "order.placed", new OrderPlacedEvent(order.getId(), order.getAmount()));
 
         return order.getId();
     }
