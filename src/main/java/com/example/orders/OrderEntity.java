@@ -16,22 +16,17 @@ public class OrderEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "customer_id", nullable = false)
+    @Column(name = "customer_id")
     private long customerId;
 
-    @Column(nullable = false)
     private String sku;
 
-    @Column(nullable = false)
     private int quantity;
 
-    @Column(nullable = false)
     private BigDecimal amount;
 
-    @Column(nullable = false)
     private String email;
 
-    @Column(nullable = false)
     private String status;
 
     @Column(name = "payment_id")
