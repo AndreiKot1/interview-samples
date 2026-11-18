@@ -6,14 +6,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
 import java.util.List;
-import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,84 +21,61 @@ public class OrderService {
     private static final String INVENTORY_URL = "https://inventory.example.com/api/v1/reservations";
     private static final String MAIL_URL = "https://mail.example.com/api/v1/send";
 
-    private final JdbcTemplate jdbcTemplate;
-    private final DataSource dataSource;
+    private final OrderRepository orderRepository;
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
-    public OrderService(JdbcTemplate jdbcTemplate, DataSource dataSource) {
-        this.jdbcTemplate = jdbcTemplate;
-        this.dataSource = dataSource;
+    public OrderService(OrderRepository orderRepository) {
+        this.orderRepository = orderRepository;
     }
 
     public record PlaceOrderRequest(long customerId, String sku, int quantity, BigDecimal amount, String email) {}
 
     @Transactional
-    public long placeOrder(PlaceOrderRequest request) throws IOException, InterruptedException, SQLException {
-        Long orderId = jdbcTemplate.queryForObject(
-                "INSERT INTO orders (customer_id, sku, quantity, amount, status) "
-                        + "VALUES (?, ?, ?, ?, 'NEW') RETURNING id",
-                Long.class,
-                request.customerId(),
-                request.sku(),
-                request.quantity(),
-                request.amount());
+    public long placeOrder(PlaceOrderRequest request) throws IOException, InterruptedException {
+        OrderEntity order = orderRepository.saveAndFlush(
+                new OrderEntity(request.customerId(), request.sku(), request.quantity(), request.amount(), request.email()));
 
-        reserveStock(orderId, request);
+        reserveStock(order);
 
-        String paymentId = chargeCustomer(orderId, request);
+        String paymentId = chargeCustomer(order);
+        order.setPaymentId(paymentId);
+        order.setStatus("PAID");
+        orderRepository.save(order);
 
-        Connection connection = dataSource.getConnection();
-        PreparedStatement statement = connection.prepareStatement(
-                "INSERT INTO order_audit (order_id, event, payment_id) VALUES (?, 'PAID', ?)");
-        statement.setLong(1, orderId);
-        statement.setString(2, paymentId);
-        statement.executeUpdate();
+        sendConfirmationMail(order);
 
-        jdbcTemplate.update("UPDATE orders SET status = 'PAID', payment_id = ? WHERE id = ?", paymentId, orderId);
-
-        sendConfirmationMail(request.email(), orderId);
-
-        if (request.quantity() > 100) {
+        if (order.getQuantity() > 100) {
             throw new IllegalStateException("Bulk orders need manual approval");
         }
 
-        statement.close();
-        connection.close();
-        return orderId;
+        return order.getId();
     }
 
     public void retryFailedOrders() throws Exception {
-        List<Long> failedIds = jdbcTemplate.queryForList("SELECT id FROM orders WHERE status = 'NEW'", Long.class);
-        for (Long id : failedIds) {
-            PlaceOrderRequest request = jdbcTemplate.queryForObject(
-                    "SELECT customer_id, sku, quantity, amount, email FROM orders WHERE id = ?",
-                    (rs, rowNum) -> new PlaceOrderRequest(
-                            rs.getLong("customer_id"),
-                            rs.getString("sku"),
-                            rs.getInt("quantity"),
-                            rs.getBigDecimal("amount"),
-                            rs.getString("email")),
-                    id);
+        List<OrderEntity> failedOrders = orderRepository.findByStatus("NEW");
+        for (OrderEntity failed : failedOrders) {
+            PlaceOrderRequest request = new PlaceOrderRequest(
+                    failed.getCustomerId(), failed.getSku(), failed.getQuantity(), failed.getAmount(), failed.getEmail());
             try {
                 placeOrder(request);
             } catch (Exception e) {
-                log.warn("Retry for order {} failed", id, e);
+                log.warn("Retry for order {} failed", failed.getId(), e);
             }
         }
     }
 
-    private void reserveStock(long orderId, PlaceOrderRequest request) throws IOException, InterruptedException {
+    private void reserveStock(OrderEntity order) throws IOException, InterruptedException {
         String body = String.format(
-                "{\"orderId\":%d,\"sku\":\"%s\",\"quantity\":%d}", orderId, request.sku(), request.quantity());
+                "{\"orderId\":%d,\"sku\":\"%s\",\"quantity\":%d}", order.getId(), order.getSku(), order.getQuantity());
         HttpResponse<String> response = post(INVENTORY_URL, body);
         if (response.statusCode() != 200) {
             throw new IllegalStateException("Stock reservation failed: " + response.statusCode());
         }
     }
 
-    private String chargeCustomer(long orderId, PlaceOrderRequest request) throws IOException, InterruptedException {
+    private String chargeCustomer(OrderEntity order) throws IOException, InterruptedException {
         String body = String.format(
-                "{\"orderId\":%d,\"customerId\":%d,\"amount\":%s}", orderId, request.customerId(), request.amount());
+                "{\"orderId\":%d,\"customerId\":%d,\"amount\":%s}", order.getId(), order.getCustomerId(), order.getAmount());
         HttpResponse<String> response = post(PAYMENT_URL, body);
         if (response.statusCode() != 200) {
             throw new IllegalStateException("Payment failed: " + response.statusCode());
@@ -111,11 +83,12 @@ public class OrderService {
         return response.body();
     }
 
-    private void sendConfirmationMail(String email, long orderId) {
+    private void sendConfirmationMail(OrderEntity order) {
         try {
-            post(MAIL_URL, String.format("{\"to\":\"%s\",\"template\":\"order-confirmed\",\"orderId\":%d}", email, orderId));
+            post(MAIL_URL, String.format(
+                    "{\"to\":\"%s\",\"template\":\"order-confirmed\",\"orderId\":%d}", order.getEmail(), order.getId()));
         } catch (Exception e) {
-            log.warn("Could not send mail for order {}", orderId);
+            log.warn("Could not send mail for order {}", order.getId());
         }
     }
 
