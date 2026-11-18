@@ -40,6 +40,7 @@ public class OrderService {
         OrderEntity order = orderRepository.saveAndFlush(
                 new OrderEntity(request.customerId(), request.sku(), request.quantity(), request.amount(), request.email()));
 
+        // http call
         apiClient.reserveStock(order);
 
         String paymentId = apiClient.chargeCustomer(order);
