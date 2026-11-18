@@ -31,7 +31,6 @@ public class OrderPlacedListener {
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + event.orderId()));
 
         String shipmentId = apiClient.createShipment(order);
-        apiClient.creditLoyaltyPoints(order);
 
         pdfGenerator.generateConfirmation(order, shipmentId);
 
